@@ -19,12 +19,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan parámetros' });
   }
 
-  // 2. Recepción de mensajes de los socios (POST)
+  // 2. Recepción y respuesta automática de mensajes (POST)
   if (req.method === 'POST') {
     const body = req.body;
 
     try {
-      // Verificamos si es un mensaje de WhatsApp válido
       if (
         body.object &&
         body.entry &&
@@ -33,20 +32,28 @@ export default async function handler(req, res) {
         body.entry[0].changes[0].value.messages[0]
       ) {
         const mensajeEntrante = body.entry[0].changes[0].value.messages[0];
-        const numeroRemitente = mensajeEntrante.from; // Número de celular del socio
-        const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body : '';
+        const numeroRemitente = mensajeEntrante.from; // Quién escribe
+        const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body.trim().toLowerCase() : '';
 
-        console.log(`Mensaje de ${numeroRemitente}: ${textoUsuario}`);
+        console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
 
-        // Aquí es donde en el futuro conectaremos la lógica de contabilidad y de "Mi Club".
-        // Por ahora, Azu responde un saludo formal de prueba:
+        // Definimos la respuesta según lo que escriba el socio
+        let respuestaTexto = "¡Hola! Bienvenido a Azu, el asistente virtual del club. Por el momento estoy en versión de pruebas 🚀.\n\nEscribí:\n1️⃣ Para ver los horarios\n2️⃣ Para consultar actividades";
+
+        if (textoUsuario === '1' || textoUsuario.includes('horario')) {
+          respuestaTexto = "🕒 Horarios del club:\nLunes a Viernes de 08:00 a 21:00 hs.\nSábados de 09:00 a 18:00 hs.";
+        } else if (textoUsuario === '2' || textoUsuario.includes('actividad')) {
+          respuestaTexto = "🎾 Actividades disponibles:\n- Tenis\n- Fútbol\n- Natación\n- Gimnasio";
+        }
+
+        // Enviamos la respuesta de vuelta a través de la API de Meta
+        await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
       }
 
-      // Siempre respondemos 200 OK inmediatamente a Meta para que no reintente el envío
       return res.status(200).send('EVENT_RECEIVED');
       
     } catch (error) {
-      console.error("Error procesando el webhook:", error);
+      console.error("Error en el webhook:", error);
       return res.status(500).json({ error: 'Error interno del servidor' });
     }
   }
@@ -54,3 +61,29 @@ export default async function handler(req, res) {
   return res.status(405).json({ error: 'Método no permitido' });
 }
 
+// Función auxiliar para enviar mensajes usando la API oficial de Meta
+async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
+  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "AQUÍ_IRÁ_EL_TOKEN_PERMANENTE"; 
+  const PHONE_NUMBER_ID = "1280442445157814"; // Tu Phone Number ID actual de pruebas
+
+  try {
+    await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: numeroDestino,
+        text: { body: respuestaRespuestaSegura(textoRespuesta) },
+      }),
+    });
+  } catch (error) {
+    console.error("Error enviando mensaje a WhatsApp:", error);
+  }
+}
+
+function respuestaRespuestaSegura(texto) {
+  return texto;
+}
