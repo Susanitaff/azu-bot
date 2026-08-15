@@ -10,7 +10,6 @@ const supabaseHeaders = {
 };
 
 export default async function handler(req, res) {
-  // 1. Verificación de seguridad de Meta (GET)
   if (req.method === 'GET') {
     const VERIFY_TOKEN = "ASU_CLUB_SECRETO_2026";
     const mode = req.query['hub.mode'];
@@ -27,7 +26,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan parámetros' });
   }
 
-  // 2. Recepción y respuesta de mensajes (POST)
   if (req.method === 'POST') {
     const body = req.body;
 
@@ -46,6 +44,12 @@ export default async function handler(req, res) {
         console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
 
         const conversacion = await buscarOCrearConversacion(numeroRemitente);
+
+        if (!conversacion) {
+          console.error("No se pudo crear/obtener la conversación en Supabase — mirar el log de arriba.");
+          return res.status(200).send('EVENT_RECEIVED');
+        }
+
         await guardarMensaje(conversacion.id, 'entrante', textoUsuario);
 
         if (conversacion.estado !== 'bot') {
@@ -80,8 +84,9 @@ async function buscarOCrearConversacion(telefono) {
     { headers: supabaseHeaders }
   );
   const encontradas = await buscar.json();
+  console.log("Supabase SELECT conversaciones:", buscar.status, JSON.stringify(encontradas));
 
-  if (encontradas.length > 0) {
+  if (Array.isArray(encontradas) && encontradas.length > 0) {
     await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${encontradas[0].id}`, {
       method: 'PATCH',
       headers: supabaseHeaders,
@@ -96,7 +101,9 @@ async function buscarOCrearConversacion(telefono) {
     body: JSON.stringify({ telefono, estado: 'bot' }),
   });
   const creada = await crear.json();
-  return creada[0];
+  console.log("Supabase INSERT conversaciones:", crear.status, JSON.stringify(creada));
+
+  return Array.isArray(creada) ? creada[0] : null;
 }
 
 async function buscarOpcion(disparador) {
@@ -105,15 +112,20 @@ async function buscarOpcion(disparador) {
     { headers: supabaseHeaders }
   );
   const resultados = await resp.json();
-  return resultados[0] || null;
+  console.log("Supabase SELECT opciones:", resp.status, JSON.stringify(resultados));
+  return Array.isArray(resultados) ? (resultados[0] || null) : null;
 }
 
 async function guardarMensaje(conversacionId, direccion, contenido) {
-  await fetch(`${SUPABASE_URL}/rest/v1/mensajes`, {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/mensajes`, {
     method: 'POST',
     headers: supabaseHeaders,
     body: JSON.stringify({ conversacion_id: conversacionId, direccion, contenido }),
   });
+  if (!resp.ok) {
+    const err = await resp.json();
+    console.error("Supabase INSERT mensajes falló:", resp.status, JSON.stringify(err));
+  }
 }
 
 // Función para enviar el mensaje a la API de Meta
