@@ -1,10 +1,18 @@
 // Archivo: api/webhook.js
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+const supabaseHeaders = {
+  apikey: SUPABASE_SERVICE_KEY,
+  Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+  'Content-Type': 'application/json',
+};
+
 export default async function handler(req, res) {
   // 1. Verificación de seguridad de Meta (GET)
   if (req.method === 'GET') {
     const VERIFY_TOKEN = "ASU_CLUB_SECRETO_2026";
-    
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
@@ -19,7 +27,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan parámetros' });
   }
 
-  // 2. Recepción y respuesta automática de mensajes (POST)
+  // 2. Recepción y respuesta de mensajes (POST)
   if (req.method === 'POST') {
     const body = req.body;
 
@@ -33,25 +41,28 @@ export default async function handler(req, res) {
       ) {
         const mensajeEntrante = body.entry[0].changes[0].value.messages[0];
         const numeroRemitente = mensajeEntrante.from;
-        const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body.trim().toLowerCase() : '';
+        const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body.trim().toLowerCase() : "";
 
         console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
 
-        // Menú de opciones de Azu (Versión 1)
-        let respuestaTexto = "¡Hola! Bienvenido a Azu, el asistente virtual del club. Por el momento estoy en versión de pruebas 🚀.\n\nEscribí:\n1️⃣ Para ver los horarios\n2️⃣ Para consultar actividades";
+        const conversacion = await buscarOCrearConversacion(numeroRemitente);
+        await guardarMensaje(conversacion.id, 'entrante', textoUsuario);
 
-        if (textoUsuario === '1' || textoUsuario.includes('horario')) {
-          respuestaTexto = "🕒 Horarios del club:\nLunes a Viernes de 08:00 a 21:00 hs.\nSábados de 09:00 a 18:00 hs.";
-        } else if (textoUsuario === '2' || textoUsuario.includes('actividad')) {
-          respuestaTexto = "🎾 Actividades disponibles:\n- Tenis\n- Fútbol\n- Natación\n- Gimnasio";
+        if (conversacion.estado !== 'bot') {
+          console.log(`Conversación de ${numeroRemitente} en estado "${conversacion.estado}" — Azu no responde automático.`);
+          return res.status(200).send('EVENT_RECEIVED');
         }
 
-        // Enviamos la respuesta a WhatsApp
+        const opcion = await buscarOpcion(textoUsuario);
+        const respuestaTexto = opcion
+          ? opcion.contenido
+          : '¡Hola! Soy Azu 👋 Escribí *1* para ver los horarios o *2* para conocer las actividades.';
+
         await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
+        await guardarMensaje(conversacion.id, 'saliente', respuestaTexto);
       }
 
       return res.status(200).send('EVENT_RECEIVED');
-      
     } catch (error) {
       console.error("Error en el webhook:", error);
       return res.status(500).json({ error: 'Error interno del servidor' });
@@ -61,10 +72,54 @@ export default async function handler(req, res) {
   return res.status(405).json({ error: 'Método no permitido' });
 }
 
+// --- Funciones que hablan con Supabase ---
+
+async function buscarOCrearConversacion(telefono) {
+  const buscar = await fetch(
+    `${SUPABASE_URL}/rest/v1/conversaciones?telefono=eq.${telefono}&select=id,estado`,
+    { headers: supabaseHeaders }
+  );
+  const encontradas = await buscar.json();
+
+  if (encontradas.length > 0) {
+    await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${encontradas[0].id}`, {
+      method: 'PATCH',
+      headers: supabaseHeaders,
+      body: JSON.stringify({ ultima_actividad: new Date().toISOString() }),
+    });
+    return encontradas[0];
+  }
+
+  const crear = await fetch(`${SUPABASE_URL}/rest/v1/conversaciones`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders, Prefer: 'return=representation' },
+    body: JSON.stringify({ telefono, estado: 'bot' }),
+  });
+  const creada = await crear.json();
+  return creada[0];
+}
+
+async function buscarOpcion(disparador) {
+  const resp = await fetch(
+    `${SUPABASE_URL}/rest/v1/opciones?disparador=eq.${disparador}&activo=eq.true&select=*`,
+    { headers: supabaseHeaders }
+  );
+  const resultados = await resp.json();
+  return resultados[0] || null;
+}
+
+async function guardarMensaje(conversacionId, direccion, contenido) {
+  await fetch(`${SUPABASE_URL}/rest/v1/mensajes`, {
+    method: 'POST',
+    headers: supabaseHeaders,
+    body: JSON.stringify({ conversacion_id: conversacionId, direccion, contenido }),
+  });
+}
+
 // Función para enviar el mensaje a la API de Meta
 async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
-  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; 
-  const PHONE_NUMBER_ID = "1308175302369400"; // Tu Phone Number ID de pruebas
+  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+  const PHONE_NUMBER_ID = "1308175302369400";
 
   try {
     const respuestaMeta = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
@@ -89,4 +144,3 @@ async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
     console.error("Error enviando mensaje a WhatsApp:", error);
   }
 }
- 
