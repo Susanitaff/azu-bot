@@ -32,12 +32,12 @@ export default async function handler(req, res) {
         body.entry[0].changes[0].value.messages[0]
       ) {
         const mensajeEntrante = body.entry[0].changes[0].value.messages[0];
-        const numeroRemitente = mensajeEntrante.from; // Quién escribe
+        const numeroRemitente = mensajeEntrante.from;
         const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body.trim().toLowerCase() : '';
 
         console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
 
-        // Definimos la respuesta según lo que escriba el socio
+        // Menú de opciones de Azu (Versión 1)
         let respuestaTexto = "¡Hola! Bienvenido a Azu, el asistente virtual del club. Por el momento estoy en versión de pruebas 🚀.\n\nEscribí:\n1️⃣ Para ver los horarios\n2️⃣ Para consultar actividades";
 
         if (textoUsuario === '1' || textoUsuario.includes('horario')) {
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
           respuestaTexto = "🎾 Actividades disponibles:\n- Tenis\n- Fútbol\n- Natación\n- Gimnasio";
         }
 
-        // Enviamos la respuesta de vuelta a través de la API de Meta
+        // Enviamos la respuesta a WhatsApp
         await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
       }
 
@@ -61,10 +61,10 @@ export default async function handler(req, res) {
   return res.status(405).json({ error: 'Método no permitido' });
 }
 
-// Función auxiliar para enviar mensajes usando la API oficial de Meta
+// Función para enviar el mensaje a la API de Meta
 async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
-  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "AQUÍ_IRÁ_EL_TOKEN_PERMANENTE"; 
-  const PHONE_NUMBER_ID = "1280442445157814"; // Tu Phone Number ID actual de pruebas
+  const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; 
+  const PHONE_NUMBER_ID = "1280442445157814"; // Tu Phone Number ID de pruebas
 
   try {
     await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
@@ -76,14 +76,10 @@ async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
       body: JSON.stringify({
         messaging_product: "whatsapp",
         to: numeroDestino,
-        text: { body: respuestaRespuestaSegura(textoRespuesta) },
+        text: { body: textoRespuesta },
       }),
     });
   } catch (error) {
     console.error("Error enviando mensaje a WhatsApp:", error);
   }
-}
-
-function respuestaRespuestaSegura(texto) {
-  return texto;
 }
