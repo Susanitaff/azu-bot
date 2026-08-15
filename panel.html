@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Panel de Azu</title>
+<style>
+  body { font-family: sans-serif; background:#f0f2f5; margin:0; padding:20px; }
+  h1 { color:#1b5e20; }
+  #login { max-width:300px; margin:60px auto; text-align:center; }
+  input { padding:8px; width:100%; box-sizing:border-box; margin-bottom:10px; }
+  button { padding:8px 16px; background:#1b5e20; color:white; border:none; border-radius:4px; cursor:pointer; }
+  .chat { background:white; border-radius:8px; padding:12px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+  .telefono { font-weight:bold; }
+  .estado { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; margin-left:8px; }
+  .estado-bot { background:#e0e0e0; color:#555; }
+  .estado-esperando_asesor { background:#fff59d; color:#7a5c00; }
+  .estado-atendido { background:#c8e6c9; color:#1b5e20; }
+</style>
+</head>
+<body>
+  <div id="login">
+    <h1>Panel de Azu</h1>
+    <input type="password" id="clave" placeholder="Contraseña" />
+    <button onclick="entrar()">Entrar</button>
+    <p id="loginError" style="color:red;"></p>
+  </div>
+
+  <div id="lista" style="display:none; max-width:600px; margin:0 auto;">
+    <h1>Conversaciones</h1>
+    <div id="chats"></div>
+  </div>
+
+<script>
+  let clave = "";
+
+  async function entrar() {
+    clave = document.getElementById('clave').value;
+    const resp = await fetch('/api/conversaciones?password=' + encodeURIComponent(clave));
+    if (!resp.ok) {
+      document.getElementById('loginError').innerText = 'Contraseña incorrecta';
+      return;
+    }
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('lista').style.display = 'block';
+    cargar();
+    setInterval(cargar, 5000);
+  }
+
+  async function cargar() {
+    const resp = await fetch('/api/conversaciones?password=' + encodeURIComponent(clave));
+    const datos = await resp.json();
+    const cont = document.getElementById('chats');
+    cont.innerHTML = '';
+    datos.forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'chat';
+      div.innerHTML = `<span class="telefono">${c.telefono}</span>
+        <span class="estado estado-${c.estado}">${c.estado}</span>
+        <div style="font-size:12px;color:#888;">Última actividad: ${new Date(c.ultima_actividad).toLocaleString('es-AR')}</div>`;
+      cont.appendChild(div);
+    });
+  }
+</script>
+</body>
+</html>
