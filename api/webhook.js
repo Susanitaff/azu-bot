@@ -64,10 +64,10 @@ export default async function handler(req, res) {
 // Función para enviar el mensaje a la API de Meta
 async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
   const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; 
-  const PHONE_NUMBER_ID = "1280442445157814"; // Tu Phone Number ID de pruebas
+  const PHONE_NUMBER_ID = "1308175302369400"; // Tu Phone Number ID de pruebas
 
   try {
-    await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
+    const respuestaMeta = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
@@ -79,7 +79,14 @@ async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
         text: { body: textoRespuesta },
       }),
     });
+    const resultado = await respuestaMeta.json();
+    if (!respuestaMeta.ok) {
+      console.error("Meta rechazó el envío:", JSON.stringify(resultado));
+    } else {
+      console.log("Mensaje enviado OK:", JSON.stringify(resultado));
+    }
   } catch (error) {
     console.error("Error enviando mensaje a WhatsApp:", error);
   }
 }
+ 
