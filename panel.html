@@ -245,12 +245,18 @@
     const datos = await resp.json();
     const cont = document.getElementById('mensajes');
     cont.innerHTML = '';
+    if (!Array.isArray(datos)) {
+      cont.innerHTML = '<p style="color:#b3261e;">[Respuesta inesperada del servidor] ' + JSON.stringify(datos) + '</p>';
+      return;
+    }
     datos.forEach(m => {
       const fila = document.createElement('div');
-      fila.className = 'msg-fila ' + m.direccion;
-      const hora = new Date(m.creado_en).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+      const direccion = m.direccion || 'entrante';
+      fila.className = 'msg-fila ' + direccion;
+      const hora = m.creado_en ? new Date(m.creado_en).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '';
+      const contenidoMostrar = (m.contenido !== undefined && m.contenido !== null) ? m.contenido : ('[dato inesperado] ' + JSON.stringify(m));
       fila.innerHTML = `<div>
-        <div class="msg ${m.direccion}">${m.contenido}</div>
+        <div class="msg ${direccion}">${contenidoMostrar}</div>
         <div class="msg-hora">${hora}</div>
       </div>`;
       cont.appendChild(fila);
@@ -372,3 +378,4 @@
 </script>
 </body>
 </html>
+
