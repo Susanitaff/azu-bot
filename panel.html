@@ -33,6 +33,7 @@
   .responder button:disabled { background:#aaa; cursor:not-allowed; }
   .aviso-bloqueado { color:#888; font-size:13px; margin-top:6px; }
   .vacio { color:#999; text-align:center; margin-top:40px; }
+  .btn-finalizar { background:#888; margin-top:8px; }
   #vistaConfiguracion { display:none; padding:20px; overflow-y:auto; }
   .opcion-card { background:white; border-radius:8px; padding:12px; margin-bottom:10px; max-width:600px; }
   .opcion-card.inactiva { opacity:0.5; }
@@ -73,6 +74,7 @@
             <button id="btnResponder" onclick="responder()">Enviar</button>
           </div>
           <div class="aviso-bloqueado" id="avisoBloqueado"></div>
+          <button class="btn-finalizar" onclick="finalizarChat()">Finalizar chat (devolver a Azu)</button>
         </div>
       </div>
     </div>
@@ -192,6 +194,19 @@
     estadoActual = 'atendido';
     actualizarBloqueo();
     cargarMensajes();
+    cargarLista();
+  }
+
+  async function finalizarChat() {
+    if (!conversacionActual) return;
+    if (!confirm('¿Finalizar este chat y devolverlo a Azu?')) return;
+    await fetch('/api/conversaciones?password=' + encodeURIComponent(clave), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: conversacionActual }),
+    });
+    estadoActual = 'bot';
+    actualizarBloqueo();
     cargarLista();
   }
 
