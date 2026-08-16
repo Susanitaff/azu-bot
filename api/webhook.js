@@ -43,13 +43,24 @@ export default async function handler(req, res) {
 
         console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
 
-        const conversacion = await buscarOCrearConversacion(numeroRemitente);
+        let conversacion = await buscarOCrearConversacion(numeroRemitente);
 
         if (!conversacion) {
           console.error("No se pudo crear/obtener la conversación en Supabase.");
           return res.status(200).send('EVENT_RECEIVED');
         }
 
+        if (conversacion.estado !== 'bot') {
+          const timeoutMinutos = await obtenerConfigNumero('timeout_minutos', 120);
+          const minutosInactiva = (Date.now() - new Date(conversacion.ultima_actividad).getTime()) / 60000;
+          if (minutosInactiva > timeoutMinutos) {
+            await cambiarEstado(conversacion.id, 'bot');
+            conversacion.estado = 'bot';
+            console.log(`Conversación de ${numeroRemitente} venció el timeout (${timeoutMinutos} min) — vuelve a modo bot.`);
+          }
+        }
+
+        await tocarConversacion(conversacion.id);
         await guardarMensaje(conversacion.id, 'entrante', textoUsuario);
 
         if (conversacion.estado !== 'bot') {
@@ -62,11 +73,11 @@ export default async function handler(req, res) {
         if (opcion && opcion.tipo_respuesta === 'derivar_asesor') {
           await enviarMensajeWhatsApp(numeroRemitente, opcion.contenido);
           await guardarMensaje(conversacion.id, 'saliente', opcion.contenido);
-          await marcarEsperandoAsesor(conversacion.id);
+          await cambiarEstado(conversacion.id, 'esperando_asesor');
         } else {
           const respuestaTexto = opcion
             ? opcion.contenido
-            : '¡Hola! Soy Azu 👋 Escribí *1* para ver los horarios, *2* para conocer las actividades o *3* para hablar con una persona.';
+            : await obtenerConfigTexto('mensaje_bienvenida', '¡Hola! Soy Azu 👋 Escribí *1* para ver los horarios, *2* para conocer las actividades o *3* para hablar con una persona.');
 
           await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
           await guardarMensaje(conversacion.id, 'saliente', respuestaTexto);
@@ -83,21 +94,14 @@ export default async function handler(req, res) {
   return res.status(405).json({ error: 'Método no permitido' });
 }
 
-// --- Funciones que hablan con Supabase ---
-
 async function buscarOCrearConversacion(telefono) {
   const buscar = await fetch(
-    `${SUPABASE_URL}/rest/v1/conversaciones?telefono=eq.${telefono}&select=id,estado`,
+    `${SUPABASE_URL}/rest/v1/conversaciones?telefono=eq.${telefono}&select=id,estado,ultima_actividad`,
     { headers: supabaseHeaders }
   );
   const encontradas = await buscar.json();
 
   if (Array.isArray(encontradas) && encontradas.length > 0) {
-    await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${encontradas[0].id}`, {
-      method: 'PATCH',
-      headers: supabaseHeaders,
-      body: JSON.stringify({ ultima_actividad: new Date().toISOString() }),
-    });
     return encontradas[0];
   }
 
@@ -110,11 +114,19 @@ async function buscarOCrearConversacion(telefono) {
   return Array.isArray(creada) ? creada[0] : null;
 }
 
-async function marcarEsperandoAsesor(conversacionId) {
+async function tocarConversacion(conversacionId) {
   await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${conversacionId}`, {
     method: 'PATCH',
     headers: supabaseHeaders,
-    body: JSON.stringify({ estado: 'esperando_asesor' }),
+    body: JSON.stringify({ ultima_actividad: new Date().toISOString() }),
+  });
+}
+
+async function cambiarEstado(conversacionId, estado) {
+  await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${conversacionId}`, {
+    method: 'PATCH',
+    headers: supabaseHeaders,
+    body: JSON.stringify({ estado }),
   });
 }
 
@@ -137,6 +149,21 @@ async function guardarMensaje(conversacionId, direccion, contenido) {
     const err = await resp.json();
     console.error("Supabase INSERT mensajes falló:", resp.status, JSON.stringify(err));
   }
+}
+
+async function obtenerConfigTexto(clave, valorPorDefecto) {
+  const resp = await fetch(
+    `${SUPABASE_URL}/rest/v1/configuracion?clave=eq.${clave}&select=valor`,
+    { headers: supabaseHeaders }
+  );
+  const resultados = await resp.json();
+  return Array.isArray(resultados) && resultados[0] ? resultados[0].valor : valorPorDefecto;
+}
+
+async function obtenerConfigNumero(clave, valorPorDefecto) {
+  const texto = await obtenerConfigTexto(clave, String(valorPorDefecto));
+  const num = parseFloat(texto);
+  return isNaN(num) ? valorPorDefecto : num;
 }
 
 async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
