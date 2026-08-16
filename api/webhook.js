@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         const conversacion = await buscarOCrearConversacion(numeroRemitente);
 
         if (!conversacion) {
-          console.error("No se pudo crear/obtener la conversación en Supabase — mirar el log de arriba.");
+          console.error("No se pudo crear/obtener la conversación en Supabase.");
           return res.status(200).send('EVENT_RECEIVED');
         }
 
@@ -58,12 +58,19 @@ export default async function handler(req, res) {
         }
 
         const opcion = await buscarOpcion(textoUsuario);
-        const respuestaTexto = opcion
-          ? opcion.contenido
-          : '¡Hola! Soy Azu 👋 Escribí *1* para ver los horarios o *2* para conocer las actividades.';
 
-        await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
-        await guardarMensaje(conversacion.id, 'saliente', respuestaTexto);
+        if (opcion && opcion.tipo_respuesta === 'derivar_asesor') {
+          await enviarMensajeWhatsApp(numeroRemitente, opcion.contenido);
+          await guardarMensaje(conversacion.id, 'saliente', opcion.contenido);
+          await marcarEsperandoAsesor(conversacion.id);
+        } else {
+          const respuestaTexto = opcion
+            ? opcion.contenido
+            : '¡Hola! Soy Azu 👋 Escribí *1* para ver los horarios, *2* para conocer las actividades o *3* para hablar con una persona.';
+
+          await enviarMensajeWhatsApp(numeroRemitente, respuestaTexto);
+          await guardarMensaje(conversacion.id, 'saliente', respuestaTexto);
+        }
       }
 
       return res.status(200).send('EVENT_RECEIVED');
@@ -84,7 +91,6 @@ async function buscarOCrearConversacion(telefono) {
     { headers: supabaseHeaders }
   );
   const encontradas = await buscar.json();
-  console.log("Supabase SELECT conversaciones:", buscar.status, JSON.stringify(encontradas));
 
   if (Array.isArray(encontradas) && encontradas.length > 0) {
     await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${encontradas[0].id}`, {
@@ -101,9 +107,15 @@ async function buscarOCrearConversacion(telefono) {
     body: JSON.stringify({ telefono, estado: 'bot' }),
   });
   const creada = await crear.json();
-  console.log("Supabase INSERT conversaciones:", crear.status, JSON.stringify(creada));
-
   return Array.isArray(creada) ? creada[0] : null;
+}
+
+async function marcarEsperandoAsesor(conversacionId) {
+  await fetch(`${SUPABASE_URL}/rest/v1/conversaciones?id=eq.${conversacionId}`, {
+    method: 'PATCH',
+    headers: supabaseHeaders,
+    body: JSON.stringify({ estado: 'esperando_asesor' }),
+  });
 }
 
 async function buscarOpcion(disparador) {
@@ -112,7 +124,6 @@ async function buscarOpcion(disparador) {
     { headers: supabaseHeaders }
   );
   const resultados = await resp.json();
-  console.log("Supabase SELECT opciones:", resp.status, JSON.stringify(resultados));
   return Array.isArray(resultados) ? (resultados[0] || null) : null;
 }
 
@@ -128,7 +139,6 @@ async function guardarMensaje(conversacionId, direccion, contenido) {
   }
 }
 
-// Función para enviar el mensaje a la API de Meta
 async function enviarMensajeWhatsApp(numeroDestino, textoRespuesta) {
   const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
   const PHONE_NUMBER_ID = "1308175302369400";
