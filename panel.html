@@ -9,8 +9,11 @@
   #login { max-width:300px; margin:60px auto; text-align:center; }
   input[type=password] { padding:8px; width:100%; box-sizing:border-box; margin-bottom:10px; }
   button { padding:8px 16px; background:#1b5e20; color:white; border:none; border-radius:4px; cursor:pointer; }
-  #app { display:none; height:100vh; }
-  .layout { display:flex; height:100%; }
+  #app { display:none; height:100vh; flex-direction:column; }
+  .tabs { display:flex; background:#1b5e20; }
+  .tab { padding:12px 20px; color:white; cursor:pointer; opacity:0.7; }
+  .tab.activo { opacity:1; border-bottom:3px solid white; font-weight:bold; }
+  .layout { display:flex; flex:1; min-height:0; }
   .col-lista { width:320px; background:white; border-right:1px solid #ddd; overflow-y:auto; padding:12px; box-sizing:border-box; }
   .col-chat { flex:1; display:flex; flex-direction:column; padding:12px; box-sizing:border-box; }
   .chat-card { background:#fafafa; border-radius:8px; padding:10px; margin-bottom:8px; cursor:pointer; border:2px solid transparent; }
@@ -30,6 +33,15 @@
   .responder button:disabled { background:#aaa; cursor:not-allowed; }
   .aviso-bloqueado { color:#888; font-size:13px; margin-top:6px; }
   .vacio { color:#999; text-align:center; margin-top:40px; }
+  #vistaConfiguracion { display:none; padding:20px; overflow-y:auto; }
+  .opcion-card { background:white; border-radius:8px; padding:12px; margin-bottom:10px; max-width:600px; }
+  .opcion-card.inactiva { opacity:0.5; }
+  .opcion-disparador { font-weight:bold; color:#1b5e20; }
+  .opcion-card textarea { width:100%; box-sizing:border-box; padding:8px; margin-top:6px; font-family:inherit; }
+  .opcion-acciones { display:flex; gap:8px; margin-top:8px; }
+  .opcion-acciones button.secundario { background:#888; }
+  .nueva-opcion { background:white; border-radius:8px; padding:12px; max-width:600px; margin-bottom:20px; }
+  .nueva-opcion input, .nueva-opcion textarea { width:100%; box-sizing:border-box; padding:8px; margin-top:6px; margin-bottom:8px; font-family:inherit; }
 </style>
 </head>
 <body>
@@ -41,7 +53,12 @@
   </div>
 
   <div id="app">
-    <div class="layout">
+    <div class="tabs">
+      <div class="tab activo" id="tabConversaciones" onclick="cambiarTab('conversaciones')">Conversaciones</div>
+      <div class="tab" id="tabConfiguracion" onclick="cambiarTab('configuracion')">Configuración</div>
+    </div>
+
+    <div class="layout" id="vistaConversaciones">
       <div class="col-lista">
         <h1>Conversaciones</h1>
         <div id="chats"></div>
@@ -59,6 +76,19 @@
         </div>
       </div>
     </div>
+
+    <div id="vistaConfiguracion">
+      <h1>Nueva opción</h1>
+      <div class="nueva-opcion">
+        <label>Disparador (número o palabra clave, ej: "4" o "cuotas")</label>
+        <input type="text" id="nuevoDisparador" />
+        <label>Respuesta</label>
+        <textarea id="nuevoContenido" rows="3"></textarea>
+        <button onclick="crearOpcion()">Agregar</button>
+      </div>
+      <h1>Opciones actuales</h1>
+      <div id="listaOpciones"></div>
+    </div>
   </div>
 
 <script>
@@ -74,10 +104,18 @@
       return;
     }
     document.getElementById('login').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
+    document.getElementById('app').style.display = 'flex';
     cargarLista();
     setInterval(cargarLista, 5000);
     setInterval(() => { if (conversacionActual) cargarMensajes(); }, 5000);
+  }
+
+  function cambiarTab(tab) {
+    document.getElementById('vistaConversaciones').style.display = tab === 'conversaciones' ? 'flex' : 'none';
+    document.getElementById('vistaConfiguracion').style.display = tab === 'configuracion' ? 'block' : 'none';
+    document.getElementById('tabConversaciones').className = 'tab' + (tab === 'conversaciones' ? ' activo' : '');
+    document.getElementById('tabConfiguracion').className = 'tab' + (tab === 'configuracion' ? ' activo' : '');
+    if (tab === 'configuracion') cargarOpciones();
   }
 
   async function cargarLista() {
@@ -155,6 +193,58 @@
     actualizarBloqueo();
     cargarMensajes();
     cargarLista();
+  }
+
+  async function cargarOpciones() {
+    const resp = await fetch('/api/opciones?password=' + encodeURIComponent(clave));
+    const datos = await resp.json();
+    const cont = document.getElementById('listaOpciones');
+    cont.innerHTML = '';
+    datos.forEach(o => {
+      const div = document.createElement('div');
+      div.className = 'opcion-card' + (o.activo ? '' : ' inactiva');
+      div.innerHTML = `
+        <span class="opcion-disparador">${o.disparador}</span> (${o.tipo_respuesta})
+        <textarea rows="3" data-id="${o.id}">${o.contenido}</textarea>
+        <div class="opcion-acciones">
+          <button onclick="guardarOpcion('${o.id}', this)">Guardar cambios</button>
+          <button class="secundario" onclick="toggleOpcion('${o.id}', ${!o.activo})">${o.activo ? 'Desactivar' : 'Activar'}</button>
+        </div>`;
+      cont.appendChild(div);
+    });
+  }
+
+  async function guardarOpcion(id, boton) {
+    const textarea = boton.closest('.opcion-card').querySelector('textarea');
+    await fetch('/api/opciones?password=' + encodeURIComponent(clave), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, contenido: textarea.value }),
+    });
+    cargarOpciones();
+  }
+
+  async function toggleOpcion(id, nuevoValor) {
+    await fetch('/api/opciones?password=' + encodeURIComponent(clave), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, activo: nuevoValor }),
+    });
+    cargarOpciones();
+  }
+
+  async function crearOpcion() {
+    const disparador = document.getElementById('nuevoDisparador').value.trim();
+    const contenido = document.getElementById('nuevoContenido').value.trim();
+    if (!disparador || !contenido) return;
+    await fetch('/api/opciones?password=' + encodeURIComponent(clave), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disparador, contenido }),
+    });
+    document.getElementById('nuevoDisparador').value = '';
+    document.getElementById('nuevoContenido').value = '';
+    cargarOpciones();
   }
 </script>
 </body>
