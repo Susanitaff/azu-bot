@@ -39,9 +39,10 @@ export default async function handler(req, res) {
       ) {
         const mensajeEntrante = body.entry[0].changes[0].value.messages[0];
         const numeroRemitente = mensajeEntrante.from;
+        const tipoMensaje = mensajeEntrante.type;
         const textoUsuario = mensajeEntrante.text ? mensajeEntrante.text.body.trim().toLowerCase() : "";
 
-        console.log(`Mensaje recibido de ${numeroRemitente}: ${textoUsuario}`);
+        console.log(`Mensaje recibido de ${numeroRemitente} (tipo: ${tipoMensaje}): ${textoUsuario}`);
 
         let conversacion = await buscarOCrearConversacion(numeroRemitente);
 
@@ -61,6 +62,23 @@ export default async function handler(req, res) {
         }
 
         await tocarConversacion(conversacion.id);
+
+        if (tipoMensaje === 'image' || tipoMensaje === 'document') {
+          await guardarMensaje(conversacion.id, 'entrante', '[Comprobante recibido — ver adjunto en WhatsApp]');
+
+          if (conversacion.estado === 'bot') {
+            const mensajeComprobante = await obtenerConfigTexto(
+              'mensaje_comprobante',
+              'Recibimos tu comprobante, gracias 🙌 En breve lo vamos a confirmar desde administración.'
+            );
+            await enviarMensajeWhatsApp(numeroRemitente, mensajeComprobante);
+            await guardarMensaje(conversacion.id, 'saliente', mensajeComprobante);
+            await cambiarEstado(conversacion.id, 'revisar_pago');
+          }
+
+          return res.status(200).send('EVENT_RECEIVED');
+        }
+
         await guardarMensaje(conversacion.id, 'entrante', textoUsuario);
 
         if (conversacion.estado !== 'bot') {
