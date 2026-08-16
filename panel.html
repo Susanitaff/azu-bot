@@ -4,17 +4,32 @@
 <meta charset="UTF-8" />
 <title>Panel de Azu</title>
 <style>
-  body { font-family: sans-serif; background:#f0f2f5; margin:0; padding:20px; }
-  h1 { color:#1b5e20; }
+  body { font-family: sans-serif; background:#f0f2f5; margin:0; padding:0; }
+  h1 { color:#1b5e20; margin:0 0 12px 0; font-size:20px; }
   #login { max-width:300px; margin:60px auto; text-align:center; }
-  input { padding:8px; width:100%; box-sizing:border-box; margin-bottom:10px; }
+  input[type=password] { padding:8px; width:100%; box-sizing:border-box; margin-bottom:10px; }
   button { padding:8px 16px; background:#1b5e20; color:white; border:none; border-radius:4px; cursor:pointer; }
-  .chat { background:white; border-radius:8px; padding:12px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+  #app { display:none; height:100vh; }
+  .layout { display:flex; height:100%; }
+  .col-lista { width:320px; background:white; border-right:1px solid #ddd; overflow-y:auto; padding:12px; box-sizing:border-box; }
+  .col-chat { flex:1; display:flex; flex-direction:column; padding:12px; box-sizing:border-box; }
+  .chat-card { background:#fafafa; border-radius:8px; padding:10px; margin-bottom:8px; cursor:pointer; border:2px solid transparent; }
+  .chat-card:hover { background:#f0f0f0; }
+  .chat-card.selected { border-color:#1b5e20; }
   .telefono { font-weight:bold; }
-  .estado { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; margin-left:8px; }
+  .estado { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; margin-left:6px; }
   .estado-bot { background:#e0e0e0; color:#555; }
-  .estado-esperando_asesor { background:#fff59d; color:#7a5c00; }
+  .estado-esperando_asesor { background:#fff59d; color:#7a5c00; font-weight:bold; }
   .estado-atendido { background:#c8e6c9; color:#1b5e20; }
+  .mensajes { flex:1; overflow-y:auto; background:white; border-radius:8px; padding:12px; margin-bottom:8px; }
+  .msg { max-width:70%; padding:8px 12px; border-radius:8px; margin-bottom:8px; clear:both; }
+  .msg.entrante { background:#e0e0e0; float:left; }
+  .msg.saliente { background:#c8e6c9; float:right; }
+  .responder { display:flex; gap:8px; }
+  .responder input { flex:1; padding:8px; }
+  .responder button:disabled { background:#aaa; cursor:not-allowed; }
+  .aviso-bloqueado { color:#888; font-size:13px; margin-top:6px; }
+  .vacio { color:#999; text-align:center; margin-top:40px; }
 </style>
 </head>
 <body>
@@ -25,13 +40,31 @@
     <p id="loginError" style="color:red;"></p>
   </div>
 
-  <div id="lista" style="display:none; max-width:600px; margin:0 auto;">
-    <h1>Conversaciones</h1>
-    <div id="chats"></div>
+  <div id="app">
+    <div class="layout">
+      <div class="col-lista">
+        <h1>Conversaciones</h1>
+        <div id="chats"></div>
+      </div>
+      <div class="col-chat">
+        <div id="sinSeleccion" class="vacio">Elegí una conversación de la izquierda</div>
+        <div id="chatSeleccionado" style="display:none; flex:1; flex-direction:column;">
+          <h1 id="telefonoSeleccionado"></h1>
+          <div class="mensajes" id="mensajes"></div>
+          <div class="responder">
+            <input type="text" id="textoRespuesta" placeholder="Escribí una respuesta..." />
+            <button id="btnResponder" onclick="responder()">Enviar</button>
+          </div>
+          <div class="aviso-bloqueado" id="avisoBloqueado"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
   let clave = "";
+  let conversacionActual = null;
+  let estadoActual = "";
 
   async function entrar() {
     clave = document.getElementById('clave').value;
@@ -41,24 +74,87 @@
       return;
     }
     document.getElementById('login').style.display = 'none';
-    document.getElementById('lista').style.display = 'block';
-    cargar();
-    setInterval(cargar, 5000);
+    document.getElementById('app').style.display = 'block';
+    cargarLista();
+    setInterval(cargarLista, 5000);
+    setInterval(() => { if (conversacionActual) cargarMensajes(); }, 5000);
   }
 
-  async function cargar() {
+  async function cargarLista() {
     const resp = await fetch('/api/conversaciones?password=' + encodeURIComponent(clave));
     const datos = await resp.json();
     const cont = document.getElementById('chats');
     cont.innerHTML = '';
     datos.forEach(c => {
       const div = document.createElement('div');
-      div.className = 'chat';
+      div.className = 'chat-card' + (conversacionActual === c.id ? ' selected' : '');
+      div.onclick = () => seleccionar(c.id, c.telefono, c.estado);
       div.innerHTML = `<span class="telefono">${c.telefono}</span>
         <span class="estado estado-${c.estado}">${c.estado}</span>
-        <div style="font-size:12px;color:#888;">Última actividad: ${new Date(c.ultima_actividad).toLocaleString('es-AR')}</div>`;
+        <div style="font-size:11px;color:#888;">${new Date(c.ultima_actividad).toLocaleString('es-AR')}</div>`;
       cont.appendChild(div);
     });
+  }
+
+  function seleccionar(id, telefono, estado) {
+    conversacionActual = id;
+    estadoActual = estado;
+    document.getElementById('sinSeleccion').style.display = 'none';
+    document.getElementById('chatSeleccionado').style.display = 'flex';
+    document.getElementById('telefonoSeleccionado').innerText = telefono;
+    document.getElementById('textoRespuesta').dataset.telefono = telefono;
+    actualizarBloqueo();
+    cargarMensajes();
+    cargarLista();
+  }
+
+  function actualizarBloqueo() {
+    const input = document.getElementById('textoRespuesta');
+    const btn = document.getElementById('btnResponder');
+    const aviso = document.getElementById('avisoBloqueado');
+    if (estadoActual === 'bot') {
+      input.disabled = true;
+      btn.disabled = true;
+      aviso.innerText = 'Azu está atendiendo este chat sola. Se habilita cuando el socio pide hablar con una persona.';
+    } else {
+      input.disabled = false;
+      btn.disabled = false;
+      aviso.innerText = '';
+    }
+  }
+
+  async function cargarMensajes() {
+    if (!conversacionActual) return;
+    const resp = await fetch(`/api/mensajes?password=${encodeURIComponent(clave)}&conversacion_id=${conversacionActual}`);
+    const datos = await resp.json();
+    const cont = document.getElementById('mensajes');
+    cont.innerHTML = '';
+    datos.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'msg ' + m.direccion;
+      div.innerText = m.contenido;
+      cont.appendChild(div);
+    });
+    cont.scrollTop = cont.scrollHeight;
+  }
+
+  async function responder() {
+    const input = document.getElementById('textoRespuesta');
+    const texto = input.value.trim();
+    if (!texto || !conversacionActual) return;
+    const telefono = input.dataset.telefono;
+
+    await fetch(`/api/mensajes?password=${encodeURIComponent(clave)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversacion_id: conversacionActual, telefono, texto }),
+    });
+
+    input.value = '';
+    estadoActual = 'atendido';
+    actualizarBloqueo();
+    cargarMensajes();
+    cargarLista();
   }
 </script>
 </body>
