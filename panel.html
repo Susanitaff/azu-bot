@@ -16,7 +16,8 @@
     --blanco: #ffffff;
   }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--crema); margin:0; color:var(--tinta); }
+  html, body { height:100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--crema); margin:0; color:var(--tinta); overflow:hidden; }
   h1, h2, .marca { font-family: "Space Grotesk", sans-serif; }
 
   #login { max-width:340px; margin:100px auto; text-align:center; background:var(--blanco); padding:36px 28px; border-radius:14px; border:1px solid var(--borde); }
@@ -28,7 +29,7 @@
   #loginError { color:#b3261e; font-size:13px; min-height:16px; }
 
   #app { display:none; height:100vh; flex-direction:column; }
-  .topbar { display:flex; align-items:center; justify-content:space-between; background:var(--verde-oscuro); color:white; padding:12px 20px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; background:var(--verde-oscuro); color:white; padding:12px 20px; flex-shrink:0; }
   .topbar .marca { font-size:18px; font-weight:700; display:flex; align-items:center; gap:8px; }
   .topbar .marca .punto { width:8px; height:8px; border-radius:50%; background:#7ee89a; display:inline-block; }
   .tabs { display:flex; gap:4px; }
@@ -38,7 +39,7 @@
 
   .layout { display:flex; flex:1; min-height:0; }
 
-  .col-lista { width:330px; background:var(--blanco); border-right:1px solid var(--borde); overflow-y:auto; padding:14px; }
+  .col-lista { width:330px; background:var(--blanco); border-right:1px solid var(--borde); overflow-y:auto; padding:14px; flex-shrink:0; }
   .col-lista h2 { font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--gris); margin:0 0 12px 4px; }
   .chat-card { background:var(--crema); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--borde); transition:transform .1s; }
   .chat-card:hover { transform:translateX(2px); }
@@ -54,13 +55,13 @@
   .estado-revisar_pago { background:#cfe4f5; color:#0d3f66; }
   .ultima-actividad { font-size:11px; color:var(--gris); margin-top:4px; }
 
-  .col-chat { flex:1; display:flex; flex-direction:column; padding:18px 22px; min-width:0; }
-  .chat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .col-chat { flex:1; display:flex; flex-direction:column; padding:18px 22px; min-width:0; min-height:0; }
+  .chat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-shrink:0; }
   .chat-header h2 { margin:0; font-size:16px; }
   .vacio { color:var(--gris); text-align:center; margin-top:80px; font-size:14px; }
   .vacio .icono { font-size:32px; display:block; margin-bottom:10px; }
 
-  .mensajes { flex:1; overflow-y:auto; background:var(--blanco); border-radius:12px; padding:16px; margin-bottom:10px; border:1px solid var(--borde); }
+  .mensajes { flex:1; overflow-y:auto; background:var(--blanco); border-radius:12px; padding:16px; margin-bottom:10px; border:1px solid var(--borde); min-height:0; }
   .msg-fila { display:flex; margin-bottom:10px; }
   .msg-fila.saliente { justify-content:flex-end; }
   .msg { max-width:65%; padding:9px 13px; border-radius:12px; font-size:14px; line-height:1.4; }
@@ -68,11 +69,11 @@
   .msg.saliente { background:#d7f0dd; border-bottom-right-radius:3px; }
   .msg-hora { font-size:10px; color:var(--gris); margin-top:3px; text-align:right; }
 
-  .responder { display:flex; gap:8px; }
+  .responder { display:flex; gap:8px; flex-shrink:0; }
   .responder input { flex:1; padding:10px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px; }
   .responder button:disabled { background:#c7c5bd; cursor:not-allowed; }
-  .aviso-bloqueado { color:var(--gris); font-size:12px; margin-top:6px; }
-  .btn-finalizar { background:transparent; color:#8b3a3a; border:1px solid #e2b8b8; margin-top:10px; font-weight:600; }
+  .aviso-bloqueado { color:var(--gris); font-size:12px; margin-top:6px; flex-shrink:0; }
+  .btn-finalizar { background:transparent; color:#8b3a3a; border:1px solid #e2b8b8; margin-top:10px; font-weight:600; flex-shrink:0; }
   .btn-finalizar:hover { background:#fbeaea; }
 
   #vistaConfiguracion { display:none; padding:24px; overflow-y:auto; }
@@ -118,7 +119,7 @@
       </div>
       <div class="col-chat">
         <div id="sinSeleccion" class="vacio"><span class="icono">💬</span>Elegí una conversación de la izquierda</div>
-        <div id="chatSeleccionado" style="display:none; flex:1; flex-direction:column;">
+        <div id="chatSeleccionado" style="display:none; flex:1; flex-direction:column; min-height:0;">
           <div class="chat-header"><h2 id="telefonoSeleccionado"></h2></div>
           <div class="mensajes" id="mensajes"></div>
           <div class="responder">
