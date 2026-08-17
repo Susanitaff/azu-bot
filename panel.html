@@ -305,13 +305,22 @@
     datos.forEach(o => {
       const div = document.createElement('div');
       div.className = 'tarjeta opcion-card' + (o.activo ? '' : ' inactiva');
-      div.innerHTML = `
-        <span class="opcion-disparador">${o.disparador}</span><span class="opcion-tipo">${o.tipo_respuesta}</span>
-        <textarea rows="3" data-id="${o.id}">${o.contenido}</textarea>
-        <div class="opcion-acciones">
-          <button onclick="guardarOpcion('${o.id}', this)">Guardar cambios</button>
-          <button class="secundario" onclick="toggleOpcion('${o.id}', ${!o.activo})">${o.activo ? 'Desactivar' : 'Activar'}</button>
-        </div>`;
+      if (o.tipo_respuesta === 'submenu') {
+        div.innerHTML = `
+          <span class="opcion-disparador">${o.disparador}</span><span class="opcion-tipo">submenú — ${o.etiqueta || ''}</span>
+          <div style="color:var(--gris); font-size:13px; margin-top:6px;">Abre un submenú (por ahora se arma por SQL).</div>
+          <div class="opcion-acciones">
+            <button class="secundario" onclick="toggleOpcion('${o.id}', ${!o.activo})">${o.activo ? 'Desactivar' : 'Activar'}</button>
+          </div>`;
+      } else {
+        div.innerHTML = `
+          <span class="opcion-disparador">${o.disparador}</span><span class="opcion-tipo">${o.tipo_respuesta}</span>
+          <textarea rows="3" data-id="${o.id}">${o.contenido || ''}</textarea>
+          <div class="opcion-acciones">
+            <button onclick="guardarOpcion('${o.id}', this)">Guardar cambios</button>
+            <button class="secundario" onclick="toggleOpcion('${o.id}', ${!o.activo})">${o.activo ? 'Desactivar' : 'Activar'}</button>
+          </div>`;
+      }
       cont.appendChild(div);
     });
   }
