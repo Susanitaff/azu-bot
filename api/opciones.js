@@ -23,6 +23,11 @@ export default async function handler(req, res) {
     if (!disparador || !contenido) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
+
+    const raizResp = await fetch(`${SUPABASE_URL}/rest/v1/menus?padre_id=is.null&select=id&limit=1`, { headers });
+    const raiz = await raizResp.json();
+    const menuId = Array.isArray(raiz) && raiz[0] ? raiz[0].id : null;
+
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/opciones`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'return=representation' },
@@ -30,6 +35,7 @@ export default async function handler(req, res) {
         disparador: disparador.trim().toLowerCase(),
         tipo_respuesta: tipo_respuesta || 'texto',
         contenido,
+        menu_id: menuId,
       }),
     });
     const data = await resp.json();
